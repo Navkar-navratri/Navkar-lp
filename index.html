@@ -68,7 +68,7 @@ src="https://www.facebook.com/tr?id=1065712732735753&ev=PageView&noscript=1"
 <link rel="stylesheet" href="css/hero.css">
 <link rel="stylesheet" href="css/sections.css">
 <link rel="stylesheet" href="css/gallery.css">
-<link rel="stylesheet" href="css/modal.css">
+<link rel="stylesheet" href="css/modal.css?v=day-tickets-2">
 </head>
 <body>
 <!-- Google Tag Manager (noscript) -->
@@ -1086,23 +1086,32 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
         <h4 class="book-h">Select tickets</h4>
         <p class="book-sub">You can add up to <b>10</b> tickets only.</p>
         <ul class="tk-list" id="bkTickets">
-          <li class="tk" data-id="kids" data-price="299" data-admits="1" data-kind="night">
+          <!-- Hidden until a date is selected; js/main.js DAY_OFFERS drives names/prices/order -->
+          <li class="tk" data-id="kids" data-price="299" data-admits="1" data-kind="night" hidden>
             <div class="tk-info">
-              <div class="tk-name">Kids 3–5 Years</div>
+              <div class="tk-name">Kids Below 3–5 Years</div>
               <div class="tk-price">₹299</div>
               <div class="tk-note">Single-night entry</div>
             </div>
             <div class="tk-act" data-act></div>
           </li>
-          <li class="tk" data-id="single" data-price="499" data-admits="1" data-kind="night">
+          <li class="tk" data-id="single" data-price="499" data-admits="1" data-kind="night" hidden>
             <div class="tk-info">
-              <div class="tk-name">Single Night</div>
+              <div class="tk-name">Single Ticket – Admits 1</div>
               <div class="tk-price">₹499</div>
               <div class="tk-note">Admits 1 · one night</div>
             </div>
             <div class="tk-act" data-act></div>
           </li>
-          <li class="tk" data-id="g4" data-price="1800" data-admits="4" data-kind="night">
+          <li class="tk" data-id="kidsSeason" data-price="1500" data-admits="1" data-kind="season" hidden>
+            <div class="tk-info">
+              <div class="tk-name">Kids Season (3–5 Years)</div>
+              <div class="tk-price">₹1,500</div>
+              <div class="tk-note">Ages 3–5 · all 9 days · food not included</div>
+            </div>
+            <div class="tk-act" data-act></div>
+          </li>
+          <li class="tk" data-id="g4" data-price="1800" data-admits="4" data-kind="night" hidden>
             <div class="tk-info">
               <div class="tk-name">Group of 4</div>
               <div class="tk-price">₹1,800</div>
@@ -1110,23 +1119,15 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
             <div class="tk-act" data-act></div>
           </li>
-          <li class="tk" data-id="kidsSeason" data-price="1500" data-admits="1" data-kind="season">
+          <li class="tk" data-id="season" data-price="2000" data-admits="1" data-kind="season" hidden>
             <div class="tk-info">
-              <div class="tk-name">Kids Season Pass</div>
-              <div class="tk-price">₹1,500</div>
-              <div class="tk-note">Ages 3–5 · all 9 days · food not included</div>
-            </div>
-            <div class="tk-act" data-act></div>
-          </li>
-          <li class="tk" data-id="season" data-price="2000" data-admits="1" data-kind="season">
-            <div class="tk-info">
-              <div class="tk-name">Season Pass</div>
+              <div class="tk-name">Season Pass – 9 Days</div>
               <div class="tk-price">₹2,000</div>
               <div class="tk-note">All 9 nights · card + QR</div>
             </div>
             <div class="tk-act" data-act></div>
           </li>
-          <li class="tk" data-id="nav9" data-price="2500" data-admits="1" data-kind="season">
+          <li class="tk" data-id="nav9" data-price="2500" data-admits="1" data-kind="season" hidden>
             <div class="tk-info">
               <div class="tk-name">9-Day Navratri Pass</div>
               <div class="tk-price">₹2,500</div>
@@ -1134,9 +1135,9 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
             </div>
             <div class="tk-act" data-act></div>
           </li>
-          <li class="tk" data-id="g10" data-price="4800" data-admits="10" data-kind="night">
+          <li class="tk" data-id="g10" data-price="4800" data-admits="10" data-kind="night" hidden>
             <div class="tk-info">
-              <div class="tk-name">Group of 10</div>
+              <div class="tk-name">Group of 10 People</div>
               <div class="tk-price">₹4,800</div>
               <div class="tk-note">₹480 each · one night</div>
             </div>
@@ -1230,7 +1231,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 
 <script src="https://checkout.razorpay.com/v1/checkout.js" defer></script>
 <script src="js/config.js" defer></script>
-<script src="js/main.js" defer></script>
+<script src="js/main.js?v=day-tickets-2" defer></script>
 
 </body>
 </html>

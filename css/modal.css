@@ -364,6 +364,8 @@
   border:1.5px solid var(--line);background:#fff;
   box-shadow:var(--sh-sm);
 }
+/* .tk sets display:flex, which overrides the HTML [hidden] attribute */
+.tk[hidden]{display:none !important}
 .tk.is-picked{border-color:var(--magenta)}
 .tk-name{
   font-family:'Outfit',sans-serif;font-size:13px;font-weight:900;

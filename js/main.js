@@ -829,14 +829,83 @@
         18: { status: 'avail', label: 'Sun 18 Oct' },
         19: { status: 'avail', label: 'Mon 19 Oct' }
       };
+
+      /* Central date-wise ticket config. Only these tickets render for each
+         selected night. 9-Day Navratri Pass is not offered on any date. */
+      function gNote(price, admits) {
+        return '₹' + Math.round(price / admits).toLocaleString('en-IN') + ' each · one night';
+      }
+
+      var DAY_OFFERS = {
+        11: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 499, name: 'Single Ticket – Admits 1', note: 'Admits 1 · one night' },
+          { id: 'kidsSeason', price: 1500, name: 'Kids Season (3–5 Years)', note: 'Ages 3–5 · all 9 days · food not included' },
+          { id: 'g4', price: 1800, name: 'Group of 4', note: gNote(1800, 4) },
+          { id: 'season', price: 2000, name: 'Season Pass – 9 Days', note: 'All 9 nights · card + QR' },
+          { id: 'g10', price: 4800, name: 'Group of 10 People', note: gNote(4800, 10) }
+        ],
+        12: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 699, name: 'Single Pass', note: 'Admits 1 · one night' }
+        ],
+        13: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 499, name: 'Single Ticket – Admits 1', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 1800, name: 'Group of 4', note: gNote(1800, 4) },
+          { id: 'g10', price: 4800, name: 'Group of 10 People', note: gNote(4800, 10) }
+        ],
+        14: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 699, name: 'Single Pass', note: 'Admits 1 · one night' }
+        ],
+        15: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 499, name: 'Single Ticket – Admits 1', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 1800, name: 'Group of 4', note: gNote(1800, 4) },
+          { id: 'g10', price: 4800, name: 'Group of 10 People', note: gNote(4800, 10) }
+        ],
+        16: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 599, name: 'Early Bird – 1 Person', note: 'Admits 1 · one night' }
+        ],
+        17: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 799, name: 'Single Pass', note: 'Admits 1 · one night' }
+        ],
+        18: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 799, name: 'Single Pass', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) }
+        ],
+        19: [
+          { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
+          { id: 'single', price: 699, name: 'Early Bird – 1 Person', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) },
+          { id: 'g10', price: 6500, name: 'Group of 10 People', note: gNote(6500, 10) }
+        ]
+      };
+
       var PASS_MAP = {
         'Kids 3–5 Years': 'kids',
+        'Kids Below 3–5 Years': 'kids',
         'Single Night': 'single',
+        'Single Ticket': 'single',
+        'Single Ticket – Admits 1': 'single',
+        'Single Pass': 'single',
+        'Single Day Pass': 'single',
+        'Early Bird Pass': 'single',
+        'Early Bird – 1 Person': 'single',
         'Group of 4': 'g4',
         'Kids Season Pass': 'kidsSeason',
+        'Kids Season (3–5 Years)': 'kidsSeason',
+        'Kids Season Pass (3–5 Years)': 'kidsSeason',
         'Season Pass': 'season',
+        'Season Pass – 9 Days': 'season',
+        'Season Pass (9 Days)': 'season',
         '9-Day Navratri Pass': 'nav9',
-        'Group of 10': 'g10'
+        'Group of 10': 'g10',
+        'Group of 10 People': 'g10'
       };
 
       var state = {
@@ -880,8 +949,66 @@
         return $$('#bkTickets .tk');
       }
 
+      function ticketRowsById() {
+        var map = {};
+        ticketRows().forEach(function (row) {
+          map[row.getAttribute('data-id')] = row;
+        });
+        return map;
+      }
+
+      /* Hide every ticket until a valid festival date is selected. */
+      function hideAllTickets() {
+        ticketRows().forEach(function (row) {
+          row.hidden = true;
+        });
+        state.qty = {};
+        renderTicketActs();
+      }
+
+      function applyDayTickets(day) {
+        var list = $('#bkTickets');
+        var offers = DAY_OFFERS[day];
+        var rows = ticketRowsById();
+
+        if (!offers) {
+          hideAllTickets();
+          return;
+        }
+
+        var offered = {};
+        offers.forEach(function (offer) {
+          offered[offer.id] = true;
+          var row = rows[offer.id];
+          if (!row) return;
+          row.hidden = false;
+          row.setAttribute('data-price', String(offer.price));
+          var nameEl = row.querySelector('.tk-name');
+          var priceEl = row.querySelector('.tk-price');
+          var noteEl = row.querySelector('.tk-note');
+          if (nameEl) nameEl.textContent = offer.name;
+          if (priceEl) priceEl.textContent = inr(offer.price);
+          if (noteEl) noteEl.textContent = offer.note || '';
+          if (list) list.appendChild(row);
+        });
+
+        Object.keys(rows).forEach(function (id) {
+          if (offered[id]) return;
+          rows[id].hidden = true;
+          if (state.qty[id]) delete state.qty[id];
+        });
+
+        /* Drop any leftover qty keys that are not valid for this date. */
+        Object.keys(state.qty).forEach(function (id) {
+          if (!offered[id]) delete state.qty[id];
+        });
+
+        renderTicketActs();
+      }
+
       function cartLines() {
         return ticketRows().map(function (row) {
+          if (row.hidden) return null;
           var id = row.getAttribute('data-id');
           var q = state.qty[id] || 0;
           if (!q) return null;
@@ -1007,12 +1134,23 @@
           var day = +b.getAttribute('data-day');
           var night = NIGHTS[day];
           if (!night || night.status === 'sold') return;
+          /* Date change: drop prior cart so prices/tickets never carry over. */
+          state.qty = {};
           state.date = { day: day, label: night.label, status: night.status };
           $$('button.is-day', grid).forEach(function (x) { x.classList.remove('is-on'); });
           b.classList.add('is-on');
           if (dateLabel) {
             dateLabel.hidden = false;
             dateLabel.textContent = 'Date: ' + night.label;
+          }
+          applyDayTickets(day);
+          if (state.prefer) {
+            var dayOffers = DAY_OFFERS[day] || [];
+            var preferOk = dayOffers.some(function (o) { return o.id === state.prefer; });
+            if (preferOk) {
+              state.qty[state.prefer] = 1;
+              renderTicketActs();
+            }
           }
           if (toTickets) toTickets.disabled = !state.date || !state.time;
           updateVenueBar();
@@ -1022,7 +1160,8 @@
       function renderTicketActs() {
         ticketRows().forEach(function (row) {
           var id = row.getAttribute('data-id');
-          var q = state.qty[id] || 0;
+          var q = row.hidden ? 0 : (state.qty[id] || 0);
+          if (row.hidden && state.qty[id]) delete state.qty[id];
           var act = row.querySelector('[data-act]');
           row.classList.toggle('is-picked', q > 0);
           if (!act) return;
@@ -1043,6 +1182,8 @@
       }
 
       function setQty(id, next) {
+        var row = ticketRowsById()[id];
+        if (!row || row.hidden) return;
         var totalOther = cartCount() - (state.qty[id] || 0);
         next = Math.max(0, Math.min(MAX - totalOther, next));
         if (next === 0) delete state.qty[id];
@@ -1069,16 +1210,13 @@
         if (form) form.reset();
         if (payErr) payErr.hidden = true;
         if (payBtn) { payBtn.disabled = false; payBtn.textContent = 'Pay with Razorpay'; }
-        renderTicketActs();
+        hideAllTickets();
         go(0);
-        if (state.prefer) {
-          state.qty[state.prefer] = 1;
-          renderTicketActs();
-        }
+        /* Prefer is applied only after a date that offers that ticket is chosen. */
       }
 
       buildCalendar();
-      renderTicketActs();
+      hideAllTickets();
 
       var start = $('#bkStart');
       if (start) start.addEventListener('click', function () { go(1); });
@@ -1091,6 +1229,7 @@
 
       if (toTickets) toTickets.addEventListener('click', function () {
         if (!state.date || !state.time) return;
+        applyDayTickets(state.date.day);
         go(2);
       });
 
