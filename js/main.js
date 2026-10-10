@@ -847,7 +847,9 @@
         ],
         12: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 699, name: 'Single Pass', note: 'Admits 1 · one night' }
+          { id: 'single', price: 699, name: 'Single Day Pass', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) },
+          { id: 'g10', price: 6500, name: 'Group of 10 People', note: gNote(6500, 10) }
         ],
         13: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
@@ -857,7 +859,9 @@
         ],
         14: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 699, name: 'Single Pass', note: 'Admits 1 · one night' }
+          { id: 'single', price: 699, name: 'Single Day Pass', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) },
+          { id: 'g10', price: 6500, name: 'Group of 10 People', note: gNote(6500, 10) }
         ],
         15: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
@@ -865,22 +869,27 @@
           { id: 'g4', price: 1800, name: 'Group of 4', note: gNote(1800, 4) },
           { id: 'g10', price: 4800, name: 'Group of 10 People', note: gNote(4800, 10) }
         ],
+        /* Early Bird → Single Day Pass (name only; price unchanged) */
         16: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 599, name: 'Early Bird – 1 Person', note: 'Admits 1 · one night' }
+          { id: 'single', price: 599, name: 'Single Day Pass', note: 'Admits 1 · one night' }
         ],
         17: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 799, name: 'Single Pass', note: 'Admits 1 · one night' }
+          { id: 'single', price: 799, name: 'Single Day Pass', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2800, name: 'Group of 4', note: gNote(2800, 4) },
+          { id: 'g10', price: 7200, name: 'Group of 10 People', note: gNote(7200, 10) }
         ],
         18: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 799, name: 'Single Pass', note: 'Admits 1 · one night' },
-          { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) }
+          { id: 'single', price: 799, name: 'Single Day Pass', note: 'Admits 1 · one night' },
+          { id: 'g4', price: 2800, name: 'Group of 4', note: gNote(2800, 4) },
+          { id: 'g10', price: 7200, name: 'Group of 10 People', note: gNote(7200, 10) }
         ],
+        /* Early Bird → Single Day Pass (name only; prices unchanged) */
         19: [
           { id: 'kids', price: 299, name: 'Kids Below 3–5 Years', note: 'Single-night entry' },
-          { id: 'single', price: 699, name: 'Early Bird – 1 Person', note: 'Admits 1 · one night' },
+          { id: 'single', price: 699, name: 'Single Day Pass', note: 'Admits 1 · one night' },
           { id: 'g4', price: 2600, name: 'Group of 4', note: gNote(2600, 4) },
           { id: 'g10', price: 6500, name: 'Group of 10 People', note: gNote(6500, 10) }
         ]
