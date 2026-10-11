@@ -603,6 +603,12 @@
         paymentStatus: 'Payment Received',
         verificationStatus: 'Pending Review'
       };
+      if (details.eventDay != null && details.eventDay !== '') {
+        row.eventDay = details.eventDay;
+      }
+      if (details.eventYear != null && details.eventYear !== '') {
+        row.eventYear = details.eventYear;
+      }
       if (proof) {
         row.proofBase64 = proof.proofBase64;
         row.proofName = proof.proofName;
@@ -830,6 +836,19 @@
         19: { status: 'avail', label: 'Mon 19 Oct' }
       };
 
+      /* 11 Oct 2026 closes at 17:00 IST (Asia/Kolkata) = 11:30 UTC.
+         Compared via UTC ms so the user's device timezone does not matter. */
+      var OCT11_CUTOFF_UTC_MS = Date.UTC(2026, 9, 11, 11, 30, 0);
+      var OCT11_CLOSED_MSG = 'Bookings for today\'s event are now closed.';
+
+      function isOct11BookingClosed() {
+        return Date.now() >= OCT11_CUTOFF_UTC_MS;
+      }
+
+      function isDayClosed(day) {
+        return Number(day) === 11 && isOct11BookingClosed();
+      }
+
       /* Central date-wise ticket config. Only these tickets render for each
          selected night. 9-Day Navratri Pass is not offered on any date. */
       function gNote(price, admits) {
@@ -931,6 +950,7 @@
       var stepper = $('#bkStepper');
       var venueBar = $('#bkVenueBar');
       var dateLabel = $('#bkDateLabel');
+      var dateClosed = $('#bkDateClosed');
       var toTickets = $('#bkToTickets');
       var toReview = $('#bkToReview');
       var subTotal = $('#bkSubTotal');
@@ -938,6 +958,42 @@
       var payErr = $('#bkPayErr');
       var payBtn = $('#bkPayBtn');
       var form = $('#bkForm');
+
+      function showDateClosedMsg(show) {
+        if (!dateClosed) return;
+        dateClosed.hidden = !show;
+        if (show) dateClosed.textContent = OCT11_CLOSED_MSG;
+      }
+
+      function clearClosedDaySelection() {
+        if (!state.date || !isDayClosed(state.date.day)) return false;
+        state.date = null;
+        state.qty = {};
+        hideAllTickets();
+        $$('#bkCalGrid button.is-day').forEach(function (b) { b.classList.remove('is-on'); });
+        if (dateLabel) { dateLabel.hidden = true; dateLabel.textContent = 'Date: —'; }
+        if (toTickets) toTickets.disabled = true;
+        showDateClosedMsg(true);
+        if (state.step >= 2 && state.step < 4) go(1);
+        return true;
+      }
+
+      function syncOct11Cutoff() {
+        var btn = $('#bkCalGrid button[data-day="11"]');
+        if (btn && isOct11BookingClosed()) {
+          btn.classList.remove('is-avail', 'is-fast', 'is-on');
+          btn.classList.add('is-day', 'is-sold');
+          btn.disabled = true;
+          btn.setAttribute('aria-label', 'Sun 11 Oct — bookings closed');
+          btn.setAttribute('title', OCT11_CLOSED_MSG);
+        }
+        clearClosedDaySelection();
+        if (isOct11BookingClosed() && (!state.date || state.date.day === 11)) {
+          showDateClosedMsg(true);
+        } else if (state.date && state.date.day !== 11) {
+          showDateClosedMsg(false);
+        }
+      }
       var proofDone = null;
       var proofDoneImg = null;
       var proofOk = $('#bkProofOk');
@@ -1130,8 +1186,14 @@
           btn.setAttribute('data-day', String(d));
           var night = NIGHTS[d];
           if (night) {
-            btn.className = 'is-day is-' + night.status;
+            var status = (d === 11 && isOct11BookingClosed()) ? 'sold' : night.status;
+            btn.className = 'is-day is-' + status;
             btn.setAttribute('aria-label', night.label);
+            if (status === 'sold') {
+              btn.disabled = true;
+              btn.setAttribute('aria-label', night.label + ' — bookings closed');
+              btn.setAttribute('title', OCT11_CLOSED_MSG);
+            }
           } else {
             btn.disabled = true;
           }
@@ -1139,10 +1201,13 @@
         }
         grid.addEventListener('click', function (e) {
           var b = e.target.closest('button.is-day');
-          if (!b) return;
+          if (!b || b.disabled) return;
           var day = +b.getAttribute('data-day');
           var night = NIGHTS[day];
-          if (!night || night.status === 'sold') return;
+          if (!night || night.status === 'sold' || isDayClosed(day)) {
+            if (isDayClosed(day)) showDateClosedMsg(true);
+            return;
+          }
           /* Date change: drop prior cart so prices/tickets never carry over. */
           state.qty = {};
           state.date = { day: day, label: night.label, status: night.status };
@@ -1152,6 +1217,7 @@
             dateLabel.hidden = false;
             dateLabel.textContent = 'Date: ' + night.label;
           }
+          showDateClosedMsg(false);
           applyDayTickets(day);
           if (state.prefer) {
             var dayOffers = DAY_OFFERS[day] || [];
@@ -1191,6 +1257,10 @@
       }
 
       function setQty(id, next) {
+        if (state.date && isDayClosed(state.date.day)) {
+          clearClosedDaySelection();
+          return;
+        }
         var row = ticketRowsById()[id];
         if (!row || row.hidden) return;
         var totalOther = cartCount() - (state.qty[id] || 0);
@@ -1220,15 +1290,21 @@
         if (payErr) payErr.hidden = true;
         if (payBtn) { payBtn.disabled = false; payBtn.textContent = 'Pay with Razorpay'; }
         hideAllTickets();
+        showDateClosedMsg(isOct11BookingClosed());
         go(0);
         /* Prefer is applied only after a date that offers that ticket is chosen. */
       }
 
       buildCalendar();
       hideAllTickets();
+      syncOct11Cutoff();
+      setInterval(syncOct11Cutoff, 30000);
 
       var start = $('#bkStart');
-      if (start) start.addEventListener('click', function () { go(1); });
+      if (start) start.addEventListener('click', function () {
+        syncOct11Cutoff();
+        go(1);
+      });
 
       if (back) back.addEventListener('click', function () {
         if (state.step === 1) go(0);
@@ -1238,6 +1314,10 @@
 
       if (toTickets) toTickets.addEventListener('click', function () {
         if (!state.date || !state.time) return;
+        if (isDayClosed(state.date.day)) {
+          clearClosedDaySelection();
+          return;
+        }
         applyDayTickets(state.date.day);
         go(2);
       });
@@ -1285,6 +1365,10 @@
 
       if (toReview) toReview.addEventListener('click', function () {
         if (!cartCount()) return;
+        if (state.date && isDayClosed(state.date.day)) {
+          clearClosedDaySelection();
+          return;
+        }
         go(3);
       });
 
@@ -1309,6 +1393,11 @@
 
         if (!cartCount()) return fail('Add at least one ticket before paying.');
         if (!state.date) return fail('Pick a night first.');
+        /* Enforce cutoff before Razorpay opens — not UI-only. */
+        if (isDayClosed(state.date.day)) {
+          clearClosedDaySelection();
+          return fail(OCT11_CLOSED_MSG);
+        }
         if (!name) return fail('Please add your name.', form.elements.name);
         if (mob.replace(/\D/g, '').length < 10) {
           return fail('Please add a valid mobile number.', form.elements.mobile);
@@ -1330,7 +1419,9 @@
           bookingType: 'Pass',
           passType: ticketsText() + ' · ' + state.date.label + ' · ' + state.time,
           quantity: cartCount(),
-          amount: amount
+          amount: amount,
+          eventDay: state.date.day,
+          eventYear: 2026
         };
         stashPending(state.pending);
 

@@ -41,7 +41,38 @@ var TEST_EMAIL = 'navkarentertainments90@gmail.com';
 
 /* Bump this whenever you deploy so you can verify the live web app is updated.
    Open your /exec URL in a browser — doGet must show this same version. */
-var SCRIPT_VERSION = 'mail-v4-sender-2026-09-29';
+var SCRIPT_VERSION = 'cutoff-oct11-17ist-2026-10-11';
+
+/* 11 Oct 2026 17:00 IST (Asia/Kolkata) = 11:30 UTC — only this night closes. */
+var OCT11_CUTOFF_UTC_MS = Date.parse('2026-10-11T11:30:00.000Z');
+var OCT11_CLOSED_MSG = 'Bookings for today\'s event are now closed.';
+
+function isOct11BookingClosed_() {
+  return Date.now() >= OCT11_CUTOFF_UTC_MS;
+}
+
+/**
+ * Reject new bookings for event day 11 after the IST cutoff.
+ * Uses Google server time (not the visitor's device timezone).
+ * attachProof is allowed so paid guests can still upload screenshots.
+ */
+function closedEventDayError_(data) {
+  if (!data || data.action === 'attachProof') return '';
+
+  var day = NaN;
+  if (data.eventDay != null && data.eventDay !== '') {
+    day = Number(data.eventDay);
+  }
+  if (isNaN(day)) {
+    var pt = String(data.passType || data.night || '');
+    if (/\b11\s*Oct\b/i.test(pt)) day = 11;
+  }
+
+  if (day === 11 && isOct11BookingClosed_()) {
+    return OCT11_CLOSED_MSG;
+  }
+  return '';
+}
 
 var HEADERS = [
   'Timestamp',
@@ -106,6 +137,13 @@ function doPost(e) {
       }
       Logger.log('[BOOKING] duplicate paymentId — email not re-sent: ' + paymentId);
       return json_({ ok: true, duplicate: true, proofUrl: extraProof || '' });
+    }
+
+    /* Block NEW 11 Oct bookings after 17:00 IST (Google server time). */
+    var closedErr = closedEventDayError_(data);
+    if (closedErr) {
+      Logger.log('[BOOKING] rejected closed event day: ' + closedErr);
+      return json_({ ok: false, error: closedErr, version: SCRIPT_VERSION });
     }
 
     /* 1) Save sheet row first */
