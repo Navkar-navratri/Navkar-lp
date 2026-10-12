@@ -41,38 +41,160 @@ var TEST_EMAIL = 'navkarentertainments90@gmail.com';
 
 /* Bump this whenever you deploy so you can verify the live web app is updated.
    Open your /exec URL in a browser — doGet must show this same version. */
-var SCRIPT_VERSION = 'cutoff-oct11-17ist-2026-10-11';
+var SCRIPT_VERSION = 'cutoff-daily-18ist-2026-10-12';
 
-/* 11 Oct 2026 17:00 IST (Asia/Kolkata) = 11:30 UTC — only this night closes. */
+/* CUTOFF_RULES_START
+   Keep in sync with js/booking-cutoff.js.
+   Timezone: Asia/Kolkata (IST, UTC+05:30, no daylight saving).
+   11 Oct 2026 closes at 17:00 IST. 12–19 Oct 2026 each close at 18:00 IST
+   on that same date. Closing one night never closes the others. */
+
+var TODAY_CLOSED_MSG = 'Bookings for today\'s event are now closed.';
+var PAST_CLOSED_MSG = 'Bookings for this event are now closed.';
+
+/** 11 Oct 2026 17:00 IST = 11:30 UTC. Unchanged from the original cutoff. */
 var OCT11_CUTOFF_UTC_MS = Date.parse('2026-10-11T11:30:00.000Z');
-var OCT11_CLOSED_MSG = 'Bookings for today\'s event are now closed.';
-
-function isOct11BookingClosed_() {
-  return Date.now() >= OCT11_CUTOFF_UTC_MS;
-}
 
 /**
- * Reject new bookings for event day 11 after the IST cutoff.
- * Uses Google server time (not the visitor's device timezone).
- * attachProof is allowed so paid guests can still upload screenshots.
+ * UTC instant when bookings for this October 2026 event day close.
+ * 12–19 Oct: 18:00 IST = 12:30 UTC on that calendar date.
  */
-function closedEventDayError_(data) {
-  if (!data || data.action === 'attachProof') return '';
+function cutoffUtcMsForDay_(day) {
+  day = Number(day);
+  if (day === 11) return OCT11_CUTOFF_UTC_MS;
+  if (day >= 12 && day <= 19) {
+    var dd = day < 10 ? '0' + day : String(day);
+    return Date.parse('2026-10-' + dd + 'T12:30:00.000Z');
+  }
+  return NaN;
+}
 
+/** Calendar date in Asia/Kolkata, not the script host's local zone. */
+function istDateParts_(nowMs) {
+  var formatted = Utilities.formatDate(new Date(nowMs), 'Asia/Kolkata', 'yyyy-MM-dd');
+  var bits = formatted.split('-');
+  return {
+    year: Number(bits[0]),
+    month: Number(bits[1]),
+    day: Number(bits[2])
+  };
+}
+
+function isEventDayBookingClosed_(day, nowMs) {
+  var cutoff = cutoffUtcMsForDay_(day);
+  if (isNaN(cutoff)) return false;
+  var now = nowMs == null ? Date.now() : nowMs;
+  return now >= cutoff;
+}
+
+function closedEventMessage_(day, nowMs) {
+  var now = nowMs == null ? Date.now() : nowMs;
+  var ist = istDateParts_(now);
+  if (ist.year === 2026 && ist.month === 10 && ist.day === Number(day)) {
+    return TODAY_CLOSED_MSG;
+  }
+  return PAST_CLOSED_MSG;
+}
+
+function eventDayFromBooking_(data) {
   var day = NaN;
-  if (data.eventDay != null && data.eventDay !== '') {
+  if (data.eventDay != null && String(data.eventDay).trim() !== '') {
     day = Number(data.eventDay);
   }
   if (isNaN(day)) {
     var pt = String(data.passType || data.night || '');
-    if (/\b11\s*Oct\b/i.test(pt)) day = 11;
+    var match = pt.match(/\b(1[1-9])\s*Oct\b/i);
+    if (match) day = Number(match[1]);
+  }
+  if (!(day >= 11 && day <= 19)) return NaN;
+  return day;
+}
+
+/**
+ * Reject a new booking after that night's own IST cutoff.
+ * Uses an absolute UTC instant (Google server clock), not the visitor's timezone.
+ * attachProof stays allowed so a paid guest can still upload a screenshot.
+ */
+function closedEventDayError_(data, nowMs) {
+  if (!data || data.action === 'attachProof') return '';
+
+  var day = eventDayFromBooking_(data);
+  if (isNaN(day) || !isEventDayBookingClosed_(day, nowMs)) return '';
+  return closedEventMessage_(day, nowMs == null ? Date.now() : nowMs);
+}
+
+/**
+ * Run from the Apps Script editor to confirm each night closes on its own.
+ * Throws on the first mismatch.
+ */
+function testEventDayCutoffs() {
+  var cases = [
+    { iso: '2026-10-11T11:29:00.000Z', day: 11, closed: false },
+    { iso: '2026-10-11T11:30:00.000Z', day: 11, closed: true, today: true },
+    { iso: '2026-10-11T11:30:00.000Z', day: 12, closed: false },
+    { iso: '2026-10-12T12:29:00.000Z', day: 11, closed: true, today: false },
+    { iso: '2026-10-12T12:29:00.000Z', day: 12, closed: false },
+    { iso: '2026-10-12T12:29:00.000Z', day: 13, closed: false },
+    { iso: '2026-10-12T12:30:00.000Z', day: 12, closed: true, today: true },
+    { iso: '2026-10-12T12:30:00.000Z', day: 13, closed: false },
+    { iso: '2026-10-14T12:31:00.000Z', day: 13, closed: true, today: false },
+    { iso: '2026-10-14T12:31:00.000Z', day: 14, closed: true, today: true },
+    { iso: '2026-10-14T12:31:00.000Z', day: 15, closed: false },
+    { iso: '2026-10-19T12:29:00.000Z', day: 19, closed: false },
+    { iso: '2026-10-19T12:29:00.000Z', day: 18, closed: true, today: false },
+    { iso: '2026-10-19T12:30:00.000Z', day: 19, closed: true, today: true },
+    { iso: '2026-10-20T04:30:00.000Z', day: 19, closed: true, today: false },
+    { iso: '2026-10-20T04:30:00.000Z', day: 12, closed: true, today: false }
+  ];
+  var i;
+  for (i = 0; i < cases.length; i++) {
+    var c = cases[i];
+    var now = Date.parse(c.iso);
+    var closed = isEventDayBookingClosed_(c.day, now);
+    if (closed !== c.closed) {
+      throw new Error('cutoff mismatch ' + c.iso + ' day ' + c.day);
+    }
+    if (!c.closed) continue;
+    var msg = closedEventMessage_(c.day, now);
+    var expect = c.today ? TODAY_CLOSED_MSG : PAST_CLOSED_MSG;
+    if (msg !== expect) throw new Error('message mismatch ' + c.iso + ' day ' + c.day + ' → ' + msg);
+    var err = closedEventDayError_({ eventDay: c.day, eventYear: 2026 }, now);
+    if (err !== expect) throw new Error('reject mismatch ' + c.iso + ' day ' + c.day);
   }
 
-  if (day === 11 && isOct11BookingClosed_()) {
-    return OCT11_CLOSED_MSG;
+  var openFuture = closedEventDayError_({
+    eventDay: 16,
+    passType: 'Single Day Pass × 1 · Fri 16 Oct · 7:00 PM',
+    eventYear: 2026
+  }, Date.parse('2026-10-14T12:31:00.000Z'));
+  if (openFuture) throw new Error('future night was rejected');
+
+  var fromLabel = closedEventDayError_({
+    passType: 'Single Day Pass × 1 · Wed 14 Oct · 7:00 PM'
+  }, Date.parse('2026-10-14T12:31:00.000Z'));
+  if (fromLabel !== TODAY_CLOSED_MSG) throw new Error('passType day was not rejected');
+
+  var pastLabel = closedEventDayError_({
+    night: 'Sun 11 Oct'
+  }, Date.parse('2026-10-14T12:31:00.000Z'));
+  if (pastLabel !== PAST_CLOSED_MSG) throw new Error('past night message mismatch');
+
+  var proof = closedEventDayError_({
+    action: 'attachProof',
+    eventDay: 11
+  }, Date.parse('2026-10-20T04:30:00.000Z'));
+  if (proof) throw new Error('attachProof must stay allowed');
+
+  if (cutoffUtcMsForDay_(11) !== Date.parse('2026-10-11T11:30:00.000Z')) {
+    throw new Error('11 Oct cutoff moved');
   }
-  return '';
+  if (cutoffUtcMsForDay_(12) - cutoffUtcMsForDay_(11) !== 25 * 60 * 60 * 1000) {
+    throw new Error('12 Oct cutoff is not 18:00 IST');
+  }
+
+  Logger.log('[CUTOFF] testEventDayCutoffs passed ' + SCRIPT_VERSION);
 }
+/* CUTOFF_RULES_END */
 
 var HEADERS = [
   'Timestamp',
@@ -139,7 +261,7 @@ function doPost(e) {
       return json_({ ok: true, duplicate: true, proofUrl: extraProof || '' });
     }
 
-    /* Block NEW 11 Oct bookings after 17:00 IST (Google server time). */
+    /* Block a new booking only after that night's own IST cutoff. */
     var closedErr = closedEventDayError_(data);
     if (closedErr) {
       Logger.log('[BOOKING] rejected closed event day: ' + closedErr);
@@ -199,6 +321,11 @@ function doGet() {
     ok: true,
     service: 'navkar-bookings',
     version: SCRIPT_VERSION,
+    timezone: 'Asia/Kolkata',
+    cutoff: {
+      oct11: '2026-10-11T17:00:00+05:30',
+      oct12to19: '18:00 IST on each event date'
+    },
     hint: 'If version is missing or old, redeploy: Manage deployments → Edit → New version → Deploy'
   });
 }

@@ -836,17 +836,15 @@
         19: { status: 'avail', label: 'Mon 19 Oct' }
       };
 
-      /* 11 Oct 2026 closes at 17:00 IST (Asia/Kolkata) = 11:30 UTC.
-         Compared via UTC ms so the user's device timezone does not matter. */
-      var OCT11_CUTOFF_UTC_MS = Date.UTC(2026, 9, 11, 11, 30, 0);
-      var OCT11_CLOSED_MSG = 'Bookings for today\'s event are now closed.';
-
-      function isOct11BookingClosed() {
-        return Date.now() >= OCT11_CUTOFF_UTC_MS;
-      }
+      /* Rules live in js/booking-cutoff.js (Asia/Kolkata instants, not the browser zone). */
+      var cutoffApi = window.NavkarBookingCutoff;
 
       function isDayClosed(day) {
-        return Number(day) === 11 && isOct11BookingClosed();
+        return cutoffApi.isDayClosed(day);
+      }
+
+      function closedMessage(day) {
+        return cutoffApi.closedMessage(day);
       }
 
       /* Central date-wise ticket config. Only these tickets render for each
@@ -943,7 +941,8 @@
         qty: {},
         prefer: null,
         paymentId: null,
-        pending: null
+        pending: null,
+        noticeDay: null
       };
 
       var back = $('#bkBack');
@@ -959,40 +958,61 @@
       var payBtn = $('#bkPayBtn');
       var form = $('#bkForm');
 
-      function showDateClosedMsg(show) {
+      function showDateClosedMsg(show, msg) {
         if (!dateClosed) return;
         dateClosed.hidden = !show;
-        if (show) dateClosed.textContent = OCT11_CLOSED_MSG;
+        if (show) dateClosed.textContent = msg || cutoffApi.TODAY_CLOSED_MSG;
+      }
+
+      function markDayButtonClosed(day) {
+        var btn = $('#bkCalGrid button[data-day="' + day + '"]');
+        if (!btn || !isDayClosed(day)) return;
+        var night = NIGHTS[day];
+        var msg = closedMessage(day);
+        btn.classList.remove('is-avail', 'is-fast', 'is-on');
+        btn.classList.add('is-day', 'is-sold');
+        /* Left clickable so a tap can show the closed message. Purchase stays blocked. */
+        btn.disabled = false;
+        btn.setAttribute('aria-disabled', 'true');
+        btn.setAttribute('aria-label', (night ? night.label + ' — ' : '') + msg);
+        btn.setAttribute('title', msg);
       }
 
       function clearClosedDaySelection() {
         if (!state.date || !isDayClosed(state.date.day)) return false;
+        var day = state.date.day;
+        var msg = closedMessage(day);
+        state.noticeDay = day;
         state.date = null;
         state.qty = {};
         hideAllTickets();
         $$('#bkCalGrid button.is-day').forEach(function (b) { b.classList.remove('is-on'); });
         if (dateLabel) { dateLabel.hidden = true; dateLabel.textContent = 'Date: —'; }
         if (toTickets) toTickets.disabled = true;
-        showDateClosedMsg(true);
+        showDateClosedMsg(true, msg);
         if (state.step >= 2 && state.step < 4) go(1);
         return true;
       }
 
-      function syncOct11Cutoff() {
-        var btn = $('#bkCalGrid button[data-day="11"]');
-        if (btn && isOct11BookingClosed()) {
-          btn.classList.remove('is-avail', 'is-fast', 'is-on');
-          btn.classList.add('is-day', 'is-sold');
-          btn.disabled = true;
-          btn.setAttribute('aria-label', 'Sun 11 Oct — bookings closed');
-          btn.setAttribute('title', OCT11_CLOSED_MSG);
-        }
-        clearClosedDaySelection();
-        if (isOct11BookingClosed() && (!state.date || state.date.day === 11)) {
-          showDateClosedMsg(true);
-        } else if (state.date && state.date.day !== 11) {
+      function syncBookingCutoffs() {
+        var day;
+        for (day = 11; day <= 19; day++) markDayButtonClosed(day);
+        if (clearClosedDaySelection()) return;
+        if (state.date && !isDayClosed(state.date.day)) {
+          state.noticeDay = null;
           showDateClosedMsg(false);
+          return;
         }
+        if (state.noticeDay && isDayClosed(state.noticeDay)) {
+          showDateClosedMsg(true, closedMessage(state.noticeDay));
+          return;
+        }
+        var ist = cutoffApi.istDateParts(Date.now());
+        if (ist.year === 2026 && ist.month === 10 && isDayClosed(ist.day)) {
+          showDateClosedMsg(true, cutoffApi.TODAY_CLOSED_MSG);
+          return;
+        }
+        showDateClosedMsg(false);
       }
       var proofDone = null;
       var proofDoneImg = null;
@@ -1186,13 +1206,15 @@
           btn.setAttribute('data-day', String(d));
           var night = NIGHTS[d];
           if (night) {
-            var status = (d === 11 && isOct11BookingClosed()) ? 'sold' : night.status;
+            var closedNow = isDayClosed(d);
+            var status = closedNow ? 'sold' : night.status;
             btn.className = 'is-day is-' + status;
             btn.setAttribute('aria-label', night.label);
-            if (status === 'sold') {
-              btn.disabled = true;
-              btn.setAttribute('aria-label', night.label + ' — bookings closed');
-              btn.setAttribute('title', OCT11_CLOSED_MSG);
+            if (closedNow) {
+              var closedMsg = closedMessage(d);
+              btn.setAttribute('aria-disabled', 'true');
+              btn.setAttribute('aria-label', night.label + ' — ' + closedMsg);
+              btn.setAttribute('title', closedMsg);
             }
           } else {
             btn.disabled = true;
@@ -1204,10 +1226,14 @@
           if (!b || b.disabled) return;
           var day = +b.getAttribute('data-day');
           var night = NIGHTS[day];
-          if (!night || night.status === 'sold' || isDayClosed(day)) {
-            if (isDayClosed(day)) showDateClosedMsg(true);
+          if (!night || isDayClosed(day)) {
+            if (isDayClosed(day)) {
+              state.noticeDay = day;
+              showDateClosedMsg(true, closedMessage(day));
+            }
             return;
           }
+          state.noticeDay = null;
           /* Date change: drop prior cart so prices/tickets never carry over. */
           state.qty = {};
           state.date = { day: day, label: night.label, status: night.status };
@@ -1277,6 +1303,7 @@
         state.qty = {};
         state.paymentId = null;
         state.pending = null;
+        state.noticeDay = null;
         passProof.clear();
         clearPending();
         if (proofOk) proofOk.hidden = true;
@@ -1290,19 +1317,19 @@
         if (payErr) payErr.hidden = true;
         if (payBtn) { payBtn.disabled = false; payBtn.textContent = 'Pay with Razorpay'; }
         hideAllTickets();
-        showDateClosedMsg(isOct11BookingClosed());
         go(0);
+        syncBookingCutoffs();
         /* Prefer is applied only after a date that offers that ticket is chosen. */
       }
 
       buildCalendar();
       hideAllTickets();
-      syncOct11Cutoff();
-      setInterval(syncOct11Cutoff, 30000);
+      syncBookingCutoffs();
+      setInterval(syncBookingCutoffs, 30000);
 
       var start = $('#bkStart');
       if (start) start.addEventListener('click', function () {
-        syncOct11Cutoff();
+        syncBookingCutoffs();
         go(1);
       });
 
@@ -1395,8 +1422,9 @@
         if (!state.date) return fail('Pick a night first.');
         /* Enforce cutoff before Razorpay opens — not UI-only. */
         if (isDayClosed(state.date.day)) {
+          var blockedMsg = closedMessage(state.date.day);
           clearClosedDaySelection();
-          return fail(OCT11_CLOSED_MSG);
+          return fail(blockedMsg);
         }
         if (!name) return fail('Please add your name.', form.elements.name);
         if (mob.replace(/\D/g, '').length < 10) {
