@@ -590,9 +590,11 @@
     }
 
     function bookingRow(details, paymentId, proof) {
+      var phone = details.phone || details.mobile || details.contact || '';
       var row = {
         name: details.name || '',
-        phone: details.phone || '',
+        phone: phone,
+        mobile: phone,
         email: details.email || '',
         city: details.city || '',
         bookingType: details.bookingType || '',

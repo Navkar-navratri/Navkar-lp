@@ -21,6 +21,7 @@
 
 var SHEET_NAME = 'Bookings';
 var PROOF_FOLDER = 'Navkar Payment Proofs';
+/* Fallbacks only — live writes resolve columns by header name (see appendBookingRow_). */
 var COL_PAYMENT_ID = 10;
 var COL_PROOF = 13;
 
@@ -41,20 +42,25 @@ var TEST_EMAIL = 'navkarentertainments90@gmail.com';
 
 /* Bump this whenever you deploy so you can verify the live web app is updated.
    Open your /exec URL in a browser — doGet must show this same version. */
-var SCRIPT_VERSION = 'mail-v4-sender-2026-09-29';
+var SCRIPT_VERSION = 'sheet-map-v5-2026-10-14';
 
+/*
+ * Canonical headers for a brand-new empty sheet only.
+ * Live Bookings tab may use different labels/order (e.g. "Ticket Type", City later).
+ * appendBookingRow_ always maps by the actual row-1 header text — never by fixed index.
+ */
 var HEADERS = [
   'Timestamp',
   'Name',
+  'Ticket Type',
   'Phone',
   'Email',
-  'City',
   'Booking Type',
-  'Pass Type',
   'Quantity',
   'Payment Amount',
   'Razorpay Payment ID',
   'Payment Status',
+  'City',
   'Verification Status',
   'Payment Proof'
 ];
@@ -92,7 +98,8 @@ function doPost(e) {
       }
       var attachedUrl = saveProof_(data);
       if (attachedUrl) {
-        sheet.getRange(existingRow, COL_PROOF).setValue(attachedUrl);
+        var proofColAttach = proofCol_(sheet);
+        if (proofColAttach) sheet.getRange(existingRow, proofColAttach).setValue(attachedUrl);
       }
       return json_({ ok: true, updated: true, proofUrl: attachedUrl || '' });
     }
@@ -102,29 +109,16 @@ function doPost(e) {
       var extraProof = '';
       if (data.proofBase64) {
         extraProof = saveProof_(data);
-        if (extraProof) sheet.getRange(existingRow, COL_PROOF).setValue(extraProof);
+        var proofColDup = proofCol_(sheet);
+        if (extraProof && proofColDup) sheet.getRange(existingRow, proofColDup).setValue(extraProof);
       }
       Logger.log('[BOOKING] duplicate paymentId — email not re-sent: ' + paymentId);
       return json_({ ok: true, duplicate: true, proofUrl: extraProof || '' });
     }
 
-    /* 1) Save sheet row first */
+    /* 1) Save sheet row first — map by header name (survives column reorder/rename) */
     var proofUrl = saveProof_(data) || '';
-    sheet.appendRow([
-      new Date(),
-      data.name || '',
-      data.phone || '',
-      customerEmail || '',
-      data.city || '',
-      data.bookingType || '',
-      data.passType || '',
-      data.quantity != null ? data.quantity : '',
-      data.amount != null ? data.amount : '',
-      paymentId,
-      data.paymentStatus || 'Payment Received',
-      data.verificationStatus || 'Pending Review',
-      proofUrl
-    ]);
+    appendBookingRow_(sheet, data, customerEmail, paymentId, proofUrl);
     Logger.log('[BOOKING] sheet row written for paymentId=' + paymentId);
 
     /* 2) Then send confirmation to the resolved customer email */
@@ -454,14 +448,94 @@ function sendRawEmail_(to, subject, plainBody, htmlBody) {
 }
 
 /* ============================================================
-   HELPERS
+   HELPERS — sheet columns by header name
    ============================================================ */
+
+/** Read row-1 headers → { "ticket type": 3, "phone": 4, ... } (1-based cols). */
+function getHeaderMap_(sheet) {
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = {};
+  for (var i = 0; i < headers.length; i++) {
+    var h = String(headers[i] == null ? '' : headers[i]).trim().toLowerCase();
+    if (h) map[h] = i + 1;
+  }
+  return map;
+}
+
+/** First matching header column (1-based), or 0 if none. */
+function col_(map, names) {
+  for (var i = 0; i < names.length; i++) {
+    var key = String(names[i] || '').trim().toLowerCase();
+    if (key && map[key]) return map[key];
+  }
+  return 0;
+}
+
+function proofCol_(sheet) {
+  return col_(getHeaderMap_(sheet), ['Payment Proof', 'Proof', 'Screenshot']) || 0;
+}
+
+function paymentIdCol_(sheet) {
+  return col_(getHeaderMap_(sheet), [
+    'Razorpay Payment ID',
+    'Payment ID',
+    'Razorpay Id',
+    'Razorpay ID'
+  ]) || COL_PAYMENT_ID;
+}
+
+/**
+ * Write one booking under the correct headers regardless of column order.
+ * Does not rename/reorder existing headers or touch past rows.
+ */
+function appendBookingRow_(sheet, data, customerEmail, paymentId, proofUrl) {
+  data = data || {};
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(HEADERS);
+  }
+
+  var map = getHeaderMap_(sheet);
+  if (!Object.keys(map).length) {
+    sheet.appendRow(HEADERS);
+    map = getHeaderMap_(sheet);
+  }
+
+  var lastCol = Math.max(sheet.getLastColumn(), HEADERS.length);
+  var row = [];
+  for (var c = 0; c < lastCol; c++) row.push('');
+
+  function set(names, value) {
+    var col = col_(map, names);
+    if (col > 0) row[col - 1] = value == null ? '' : value;
+  }
+
+  var phone = data.phone || data.mobile || data.contact || '';
+
+  set(['Timestamp'], new Date());
+  set(['Name'], data.name || '');
+  set(['Ticket Type', 'Pass Type', 'Pass / Ticket', 'Details'], data.passType || '');
+  set(['Phone', 'Mobile', 'Mobile Number'], phone);
+  set(['Email'], customerEmail || data.email || '');
+  set(['Booking Type'], data.bookingType || '');
+  set(['Quantity', 'Qty'], data.quantity != null ? data.quantity : '');
+  set(['Payment Amount', 'Amount'], data.amount != null ? data.amount : '');
+  set(['Razorpay Payment ID', 'Payment ID', 'Razorpay Id', 'Razorpay ID'], paymentId || '');
+  set(['Payment Status'], data.paymentStatus || 'Payment Received');
+  set(['City'], data.city || '');
+  set(['Verification Status'], data.verificationStatus || 'Pending Review');
+  set(['Payment Proof', 'Proof', 'Screenshot'], proofUrl || '');
+
+  sheet.appendRow(row);
+  Logger.log('[BOOKING] header map used: ' + JSON.stringify(map));
+}
 
 function findPaymentRow_(sheet, paymentId) {
   if (!paymentId) return -1;
   var last = sheet.getLastRow();
   if (last < 2) return -1;
-  var values = sheet.getRange(2, COL_PAYMENT_ID, last, COL_PAYMENT_ID).getValues();
+  var payCol = paymentIdCol_(sheet);
+  var values = sheet.getRange(2, payCol, last, payCol).getValues();
   for (var i = 0; i < values.length; i++) {
     if (String(values[i][0]) === String(paymentId)) return i + 2;
   }
